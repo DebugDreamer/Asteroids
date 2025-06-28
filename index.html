@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Simple Asteroids Game</title>
     <style>
@@ -12,11 +13,13 @@
             margin: 0;
             background-color: #000;
         }
+
         canvas {
             border: 2px solid white;
         }
     </style>
 </head>
+
 <body>
     <canvas id="gameCanvas" width="800" height="600"></canvas>
 
@@ -100,8 +103,8 @@
         document.addEventListener('keydown', (e) => {
             if (e.key === ' ') { // Fire a bullet every time spacebar is pressed
                 bullets.push({
-                    x: ship.x + 4/3 * ship.radius * Math.cos(ship.angle),
-                    y: ship.y - 4/3 * ship.radius * Math.sin(ship.angle),
+                    x: ship.x + 4 / 3 * ship.radius * Math.cos(ship.angle),
+                    y: ship.y - 4 / 3 * ship.radius * Math.sin(ship.angle),
                     dx: GAME_SETTINGS.BULLET_SPEED * Math.cos(ship.angle),
                     dy: -GAME_SETTINGS.BULLET_SPEED * Math.sin(ship.angle),
                     life: GAME_SETTINGS.BULLET_LIFE,
@@ -185,48 +188,76 @@
         });
 
         // --- Helper function for explosion effect ---
-function explodeAt(x, y, aoeRadius) {
-    let destroyed = [];
-    asteroids.forEach(a => {
-        const adx = x - a.x;
-        const ady = y - a.y;
-        if (Math.sqrt(adx * adx + ady * ady) < aoeRadius) {
-            if (a.radius > GAME_SETTINGS.ASTEROID_SIZE / 4) {
-                const pieces = Math.floor(Math.random() * 3) + 1;
-                const newRadius = a.radius / 2;
-                for (let i = 0; i < pieces; i++) {
-                    destroyed.push({
-                        x: a.x,
-                        y: a.y,
-                        dx: (Math.random() * 2 - 1) * GAME_SETTINGS.ASTEROID_SPEED,
-                        dy: (Math.random() * 2 - 1) * GAME_SETTINGS.ASTEROID_SPEED,
-                        radius: newRadius
-                    });
+        function explodeAt(x, y, aoeRadius) {
+            let destroyed = [];
+            asteroids.forEach(a => {
+                const adx = x - a.x;
+                const ady = y - a.y;
+                if (Math.sqrt(adx * adx + ady * ady) < aoeRadius) {
+                    if (a.radius > GAME_SETTINGS.ASTEROID_SIZE / 4) {
+                        const pieces = Math.floor(Math.random() * 3) + 1;
+                        const newRadius = a.radius / 2;
+                        for (let i = 0; i < pieces; i++) {
+                            destroyed.push({
+                                x: a.x,
+                                y: a.y,
+                                dx: (Math.random() * 2 - 1) * GAME_SETTINGS.ASTEROID_SPEED,
+                                dy: (Math.random() * 2 - 1) * GAME_SETTINGS.ASTEROID_SPEED,
+                                radius: newRadius
+                            });
+                        }
+                    }
                 }
-            }
+            });
+            asteroids = asteroids.filter(a => {
+                const adx = x - a.x;
+                const ady = y - a.y;
+                return Math.sqrt(adx * adx + ady * ady) >= aoeRadius;
+            });
+            asteroids.push(...destroyed);
+            explosions.push({
+                x: x,
+                y: y,
+                radius: aoeRadius,
+                maxRadius: aoeRadius,
+                alpha: 1.0,
+                frame: 0
+            });
         }
-    });
-    asteroids = asteroids.filter(a => {
-        const adx = x - a.x;
-        const ady = y - a.y;
-        return Math.sqrt(adx * adx + ady * ady) >= aoeRadius;
-    });
-    asteroids.push(...destroyed);
-    explosions.push({
-        x: x,
-        y: y,
-        radius: aoeRadius,
-        maxRadius: aoeRadius,
-        alpha: 1.0,
-        frame: 0
-    });
-}
 
         // Game loop
         let gameOver = false;
         let shipAlive = true;
         let shipTrappedInBlackhole = false;
         let trappedBlackholeIndex = -1;
+        // Add new asteroids every 15 seconds
+        let lastAsteroidAddTime = Date.now();
+        function maybeAddAsteroids() {
+            const now = Date.now();
+            if (now - lastAsteroidAddTime >= 15000) { // 15 seconds
+                // Add 1-2 new asteroids
+                const numNew = Math.floor(Math.random() * 2) + 1;
+                for (let i = 0; i < numNew; i++) {
+                    let x, y;
+                    // Ensure not spawning on top of the player
+                    do {
+                        x = Math.random() * canvas.width;
+                        y = Math.random() * canvas.height;
+                    } while (
+                        Math.abs(x - ship.x) < GAME_SETTINGS.ASTEROID_SIZE * 2 &&
+                        Math.abs(y - ship.y) < GAME_SETTINGS.ASTEROID_SIZE * 2
+                    );
+                    asteroids.push({
+                        x: x,
+                        y: y,
+                        dx: (Math.random() * 2 - 1) * GAME_SETTINGS.ASTEROID_SPEED,
+                        dy: (Math.random() * 2 - 1) * GAME_SETTINGS.ASTEROID_SPEED,
+                        radius: GAME_SETTINGS.ASTEROID_SIZE
+                    });
+                }
+                lastAsteroidAddTime = now;
+            }
+        }
         function update() {
             // Clear the canvas
             ctx.fillStyle = 'black';
@@ -295,16 +326,16 @@ function explodeAt(x, y, aoeRadius) {
                 ctx.lineWidth = 2;
                 ctx.beginPath();
                 ctx.moveTo(
-                    ship.x + 4/3 * ship.radius * Math.cos(ship.angle),
-                    ship.y - 4/3 * ship.radius * Math.sin(ship.angle)
+                    ship.x + 4 / 3 * ship.radius * Math.cos(ship.angle),
+                    ship.y - 4 / 3 * ship.radius * Math.sin(ship.angle)
                 );
                 ctx.lineTo(
-                    ship.x - ship.radius * (2/3 * Math.cos(ship.angle) + Math.sin(ship.angle)),
-                    ship.y + ship.radius * (2/3 * Math.sin(ship.angle) - Math.cos(ship.angle))
+                    ship.x - ship.radius * (2 / 3 * Math.cos(ship.angle) + Math.sin(ship.angle)),
+                    ship.y + ship.radius * (2 / 3 * Math.sin(ship.angle) - Math.cos(ship.angle))
                 );
                 ctx.lineTo(
-                    ship.x - ship.radius * (2/3 * Math.cos(ship.angle) - Math.sin(ship.angle)),
-                    ship.y + ship.radius * (2/3 * Math.sin(ship.angle) + Math.cos(ship.angle))
+                    ship.x - ship.radius * (2 / 3 * Math.cos(ship.angle) - Math.sin(ship.angle)),
+                    ship.y + ship.radius * (2 / 3 * Math.sin(ship.angle) + Math.cos(ship.angle))
                 );
                 ctx.closePath();
                 ctx.stroke();
@@ -537,7 +568,7 @@ function explodeAt(x, y, aoeRadius) {
                         shipAlive = false;
                         // Create ship explosion animation
                         shipExplosion = {
-                            particles: Array.from({length: 16}, (_, i) => {
+                            particles: Array.from({ length: 16 }, (_, i) => {
                                 const angle = (Math.PI * 2 * i) / 16;
                                 return {
                                     x: ship.x,
@@ -561,195 +592,198 @@ function explodeAt(x, y, aoeRadius) {
                         shipAlive = false;
                         // Create ship explosion animation
                         shipExplosion = {
-                            particles: Array.from({length: 16}, (_, i) => {
+                            particles: Array.from({ length: 16 }, (_, i) => {
                                 const angle = (Math.PI * 2 * i) / 16;
                                 return {
                                     x: ship.x,
                                     y: ship.y,
                                     dx: Math.cos(angle) * (3 + Math.random() * 2),
                                     dy: Math.sin(angle) * (3 + Math.random() * 2)
-                            };
-                        }),
-                        alpha: 1.0
-                    };
-                    break;
+                                };
+                            }),
+                            alpha: 1.0
+                        };
+                        break;
+                    }
+                }
+                // Ship collision with blackholes
+                for (let i = 0; i < blackholes.length; i++) {
+                    const dx = ship.x - blackholes[i].x;
+                    const dy = ship.y - blackholes[i].y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < ship.radius + blackholes[i].radius) {
+                        gameOver = true;
+                        shipAlive = false;
+                        shipTrappedInBlackhole = true;
+                        trappedBlackholeIndex = i;
+                        // Do NOT create explosion for blackhole death
+                        break;
+                    }
                 }
             }
-            // Ship collision with blackholes
-            for (let i = 0; i < blackholes.length; i++) {
-                const dx = ship.x - blackholes[i].x;
-                const dy = ship.y - blackholes[i].y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist < ship.radius + blackholes[i].radius) {
-                    gameOver = true;
-                    shipAlive = false;
-                    shipTrappedInBlackhole = true;
-                    trappedBlackholeIndex = i;
-                    // Do NOT create explosion for blackhole death
-                    break;
+            // If ship is trapped in a blackhole, check if that blackhole still exists
+            if (shipTrappedInBlackhole) {
+                // Move ship toward blackhole center like asteroids
+                if (trappedBlackholeIndex < blackholes.length) {
+                    const bh = blackholes[trappedBlackholeIndex];
+                    const dx = bh.x - ship.x;
+                    const dy = bh.y - ship.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist > 1) { // Avoid division by zero
+                        ship.x += (dx / dist) * 0.5;
+                        ship.y += (dy / dist) * 0.5;
+                    }
+                } else {
+                    // Blackhole expired
+                    shipTrappedInBlackhole = false;
                 }
             }
-        }
-        // If ship is trapped in a blackhole, check if that blackhole still exists
-        if (shipTrappedInBlackhole) {
-            // Move ship toward blackhole center like asteroids
-            if (trappedBlackholeIndex < blackholes.length) {
-                const bh = blackholes[trappedBlackholeIndex];
-                const dx = bh.x - ship.x;
-                const dy = bh.y - ship.y;
-                const dist = Math.sqrt(dx * dx + dy * dy);
-                if (dist > 1) { // Avoid division by zero
-                    ship.x += (dx / dist) * 0.5;
-                    ship.y += (dy / dist) * 0.5;
-                }
+            // Draw Game Over message if needed, after everything else
+            if (gameOver) {
+                ctx.save();
+                ctx.fillStyle = 'red';
+                ctx.font = 'bold 60px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2);
+                ctx.restore();
+                // Draw retry button
+                const btnW = 200, btnH = 60;
+                const btnX = canvas.width / 2 - btnW / 2;
+                const btnY = canvas.height / 2 + 40;
+                ctx.save();
+                ctx.fillStyle = '#222';
+                ctx.globalAlpha = 0.85;
+                ctx.fillRect(btnX, btnY, btnW, btnH);
+                ctx.globalAlpha = 1.0;
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(btnX, btnY, btnW, btnH);
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 32px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('Retry', canvas.width / 2, btnY + btnH / 2);
+                ctx.restore();
+                // Store button bounds for click detection
+                window.retryBtnBounds = { x: btnX, y: btnY, w: btnW, h: btnH };
             } else {
-                // Blackhole expired
-                shipTrappedInBlackhole = false;
+                window.retryBtnBounds = null;
             }
-        }
-        // Draw Game Over message if needed, after everything else
-        if (gameOver) {
+
+            // Refactored: common retry logic
+            function resetGameIfRetryBtnPressed(x, y, event) {
+                if (!window.retryBtnBounds) return;
+                const b = window.retryBtnBounds;
+                if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
+                    asteroids = [];
+                    bullets = [];
+                    explosions = [];
+                    powerUp = null;
+                    hasExplodingShot = false;
+                    hasBlackholeShot = false;
+                    blackholes = [];
+                    ship.x = canvas.width / 2;
+                    ship.y = canvas.height / 2;
+                    ship.angle = 0;
+                    ship.thrust.x = 0;
+                    ship.thrust.y = 0;
+                    shipAlive = true;
+                    shipTrappedInBlackhole = false;
+                    trappedBlackholeIndex = -1;
+                    gameOver = false;
+                    createAsteroids();
+                    if (event) event.preventDefault();
+                    return true;
+                }
+                return false;
+            }
+
+            // Retry button click handler
+            canvas.addEventListener('mousedown', function (e) {
+                if (!window.retryBtnBounds) return;
+                const rect = canvas.getBoundingClientRect();
+                const mx = e.clientX - rect.left;
+                const my = e.clientY - rect.top;
+                resetGameIfRetryBtnPressed(mx, my, e);
+            });
+
+            // Retry button touch handler for iOS/touch devices
+            canvas.addEventListener('touchstart', function (e) {
+                if (!window.retryBtnBounds) return;
+                const rect = canvas.getBoundingClientRect();
+                for (let i = 0; i < e.touches.length; i++) {
+                    const tx = e.touches[i].clientX - rect.left;
+                    const ty = e.touches[i].clientY - rect.top;
+                    if (resetGameIfRetryBtnPressed(tx, ty, e)) break;
+                }
+            }, { passive: false });
+
+            // Touch event for shoot button
+            canvas.addEventListener('touchstart', function (e) {
+                if (!window.shootBtn) return;
+                for (let i = 0; i < e.touches.length; i++) {
+                    const rect = canvas.getBoundingClientRect();
+                    const tx = e.touches[i].clientX - rect.left;
+                    const ty = e.touches[i].clientY - rect.top;
+                    const b = window.shootBtn;
+                    const dist = Math.sqrt((tx - b.x) * (tx - b.x) + (ty - b.y) * (ty - b.y));
+                    if (dist <= b.r) {
+                        // Fire a bullet (same as spacebar)
+                        bullets.push({
+                            x: ship.x + 4 / 3 * ship.radius * Math.cos(ship.angle),
+                            y: ship.y - 4 / 3 * ship.radius * Math.sin(ship.angle),
+                            dx: GAME_SETTINGS.BULLET_SPEED * Math.cos(ship.angle),
+                            dy: -GAME_SETTINGS.BULLET_SPEED * Math.sin(ship.angle),
+                            life: GAME_SETTINGS.BULLET_LIFE,
+                            exploding: hasExplodingShot,
+                            blackhole: hasBlackholeShot
+                        });
+                        hasExplodingShot = false;
+                        hasBlackholeShot = false;
+                        // Prevent drag from starting if shoot button is pressed
+                        e.preventDefault();
+                        break;
+                    }
+                }
+            }, { passive: false });
+
+            // --- Draw Shoot button for touch devices (always on top) ---
+            const shootBtnRadius = 48;
+            const shootBtnX = canvas.width - shootBtnRadius - 20;
+            const shootBtnY = canvas.height - shootBtnRadius - 20;
             ctx.save();
-            ctx.fillStyle = 'red';
-            ctx.font = 'bold 60px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2);
-            ctx.restore();
-            // Draw retry button
-            const btnW = 200, btnH = 60;
-            const btnX = canvas.width / 2 - btnW / 2;
-            const btnY = canvas.height / 2 + 40;
-            ctx.save();
-            ctx.fillStyle = '#222';
             ctx.globalAlpha = 0.85;
-            ctx.fillRect(btnX, btnY, btnW, btnH);
+            ctx.beginPath();
+            ctx.arc(shootBtnX, shootBtnY, shootBtnRadius, 0, Math.PI * 2);
+            ctx.fillStyle = '#222';
+            ctx.shadowColor = 'white';
+            ctx.shadowBlur = 16;
+            ctx.fill();
             ctx.globalAlpha = 1.0;
+            ctx.lineWidth = 5;
             ctx.strokeStyle = 'white';
-            ctx.lineWidth = 3;
-            ctx.strokeRect(btnX, btnY, btnW, btnH);
+            ctx.stroke();
+            ctx.font = 'bold 30px Arial';
             ctx.fillStyle = 'white';
-            ctx.font = 'bold 32px Arial';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText('Retry', canvas.width / 2, btnY + btnH / 2);
+            ctx.shadowColor = 'black';
+            ctx.shadowBlur = 0;
+            ctx.fillText('SHOOT', shootBtnX, shootBtnY);
             ctx.restore();
-            // Store button bounds for click detection
-            window.retryBtnBounds = { x: btnX, y: btnY, w: btnW, h: btnH };
-        } else {
-            window.retryBtnBounds = null;
+            // Store button bounds for touch detection
+            window.shootBtn = { x: shootBtnX, y: shootBtnY, r: shootBtnRadius };
+
+            maybeAddAsteroids(); // Ensure new asteroids spawn every 15 seconds
+
+            // Request next frame
+            requestAnimationFrame(update);
         }
 
-        // Refactored: common retry logic
-        function resetGameIfRetryBtnPressed(x, y, event) {
-            if (!window.retryBtnBounds) return;
-            const b = window.retryBtnBounds;
-            if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
-                asteroids = [];
-                bullets = [];
-                explosions = [];
-                powerUp = null;
-                hasExplodingShot = false;
-                hasBlackholeShot = false;
-                blackholes = [];
-                ship.x = canvas.width / 2;
-                ship.y = canvas.height / 2;
-                ship.angle = 0;
-                ship.thrust.x = 0;
-                ship.thrust.y = 0;
-                shipAlive = true;
-                shipTrappedInBlackhole = false;
-                trappedBlackholeIndex = -1;
-                gameOver = false;
-                createAsteroids();
-                if (event) event.preventDefault();
-                return true;
-            }
-            return false;
-        }
-
-        // Retry button click handler
-        canvas.addEventListener('mousedown', function(e) {
-            if (!window.retryBtnBounds) return;
-            const rect = canvas.getBoundingClientRect();
-            const mx = e.clientX - rect.left;
-            const my = e.clientY - rect.top;
-            resetGameIfRetryBtnPressed(mx, my, e);
-        });
-
-        // Retry button touch handler for iOS/touch devices
-        canvas.addEventListener('touchstart', function(e) {
-            if (!window.retryBtnBounds) return;
-            const rect = canvas.getBoundingClientRect();
-            for (let i = 0; i < e.touches.length; i++) {
-                const tx = e.touches[i].clientX - rect.left;
-                const ty = e.touches[i].clientY - rect.top;
-                if (resetGameIfRetryBtnPressed(tx, ty, e)) break;
-            }
-        }, { passive: false });
-
-        // Touch event for shoot button
-canvas.addEventListener('touchstart', function(e) {
-    if (!window.shootBtn) return;
-    for (let i = 0; i < e.touches.length; i++) {
-        const rect = canvas.getBoundingClientRect();
-        const tx = e.touches[i].clientX - rect.left;
-        const ty = e.touches[i].clientY - rect.top;
-        const b = window.shootBtn;
-        const dist = Math.sqrt((tx - b.x) * (tx - b.x) + (ty - b.y) * (ty - b.y));
-        if (dist <= b.r) {
-            // Fire a bullet (same as spacebar)
-            bullets.push({
-                x: ship.x + 4/3 * ship.radius * Math.cos(ship.angle),
-                y: ship.y - 4/3 * ship.radius * Math.sin(ship.angle),
-                dx: GAME_SETTINGS.BULLET_SPEED * Math.cos(ship.angle),
-                dy: -GAME_SETTINGS.BULLET_SPEED * Math.sin(ship.angle),
-                life: GAME_SETTINGS.BULLET_LIFE,
-                exploding: hasExplodingShot,
-                blackhole: hasBlackholeShot
-            });
-            hasExplodingShot = false;
-            hasBlackholeShot = false;
-            // Prevent drag from starting if shoot button is pressed
-            e.preventDefault();
-            break;
-        }
-    }
-}, { passive: false });
-
-        // --- Draw Shoot button for touch devices (always on top) ---
-        const shootBtnRadius = 48;
-        const shootBtnX = canvas.width - shootBtnRadius - 20;
-        const shootBtnY = canvas.height - shootBtnRadius - 20;
-        ctx.save();
-        ctx.globalAlpha = 0.85;
-        ctx.beginPath();
-        ctx.arc(shootBtnX, shootBtnY, shootBtnRadius, 0, Math.PI * 2);
-        ctx.fillStyle = '#222';
-        ctx.shadowColor = 'white';
-        ctx.shadowBlur = 16;
-        ctx.fill();
-        ctx.globalAlpha = 1.0;
-        ctx.lineWidth = 5;
-        ctx.strokeStyle = 'white';
-        ctx.stroke();
-        ctx.font = 'bold 30px Arial';
-        ctx.fillStyle = 'white';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'black';
-        ctx.shadowBlur = 0;
-        ctx.fillText('SHOOT', shootBtnX, shootBtnY);
-        ctx.restore();
-        // Store button bounds for touch detection
-        window.shootBtn = { x: shootBtnX, y: shootBtnY, r: shootBtnRadius };
-
-        // Request next frame
-        requestAnimationFrame(update);
-    }
-
-    // Start the game
-    createAsteroids();
-    update();
+        // Start the game
+        createAsteroids();
+        update();
     </script>
 </body>
+
 </html>
