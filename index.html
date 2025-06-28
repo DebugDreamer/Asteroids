@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Simple Asteroids Game</title>
+    <style>
+        /* Basic styling to center the game canvas */
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #000;
+        }
+        canvas {
+            border: 2px solid white;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+    <script>
+        // Get the canvas and its context
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game objects
+        const ship = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            radius: 20,
+            angle: 0,
+            rotation: 0,
+            thrusting: false,
+            thrust: {
+                x: 0,
+                y: 0
+            }
+        };
+
+        // Array to store asteroids
+        let asteroids = [];
+
+        // Array to store bullets
+        let bullets = [];
+
+        // Array to store explosions
+        let explosions = [];
+
+        // Power-up object
+        let powerUp = null;
+        let hasExplodingShot = false;
+        let blackholePowerUp = null;
+        let hasBlackholeShot = false;
+        let blackholes = [];
+
+        // Game settings (easy to modify)
+        const GAME_SETTINGS = {
+            FPS: 60,                    // Frames per second
+            ASTEROID_COUNT: 5,          // Initial number of asteroids
+            ASTEROID_SPEED: 2,          // Maximum asteroid speed
+            ASTEROID_SIZE: 50,          // Size of asteroids
+            SHIP_THRUST: 0.3,          // Acceleration of the ship
+            SHIP_TURN_SPEED: 0.06,     // How fast the ship rotates
+            FRICTION: 0.99,            // Ship movement friction (1 = no friction)
+            BULLET_SPEED: 7,           // Speed of bullets
+            BULLET_LIFE: 60            // How long bullets last in frames
+        };
+
+        // Initialize asteroids
+        function createAsteroids() {
+            for (let i = 0; i < GAME_SETTINGS.ASTEROID_COUNT; i++) {
+                // Create asteroids away from the ship
+                let x, y;
+                do {
+                    x = Math.random() * canvas.width;
+                    y = Math.random() * canvas.height;
+                } while (
+                    Math.abs(x - ship.x) < GAME_SETTINGS.ASTEROID_SIZE * 2 &&
+                    Math.abs(y - ship.y) < GAME_SETTINGS.ASTEROID_SIZE * 2
+                );
+
+                asteroids.push({
+                    x: x,
+                    y: y,
+                    dx: (Math.random() * 2 - 1) * GAME_SETTINGS.ASTEROID_SPEED,
+                    dy: (Math.random() * 2 - 1) * GAME_SETTINGS.ASTEROID_SPEED,
+                    radius: GAME_SETTINGS.ASTEROID_SIZE
+                });
+            }
+        }
+
+        // Handle keyboard input
+        const keys = {};
+        document.addEventListener('keydown', (e) => keys[e.key] = true);
+        document.addEventListener('keyup', (e) => keys[e.key] = false);
+
+        // Shoot bullets
+        document.addEventListener('keydown', (e) => {
+            if (e.key === ' ') { // Fire a bullet every time spacebar is pressed
+                bullets.push({
+                    x: ship.x + 4/3 * ship.radius * Math.cos(ship.angle),
+                    y: ship.y - 4/3 * ship.radius * Math.sin(ship.angle),
+                    dx: GAME_SETTINGS.BULLET_SPEED * Math.cos(ship.angle),
+                    dy: -GAME_SETTINGS.BULLET_SPEED * Math.sin(ship.angle),
+                    life: GAME_SETTINGS.BULLET_LIFE,
+                    exploding: hasExplodingShot,
+                    blackhole: hasBlackholeShot
+                });
+                hasExplodingShot = false;
+                hasBlackholeShot = false;
+            }
+        });
+
+        // Function to spawn a power-up randomly
+        function maybeSpawnPowerUp() {
+            if (!powerUp && Math.random() < 0.002) { // ~1 in 500 chance per frame
+                powerUp = {
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    radius: 12,
+                    type: Math.random() < 0.5 ? 'exploding' : 'blackhole' // 50/50 chance
+                };
+            }
+        }
+
+        // --- Touch/drag control variables ---
+        let dragActive = false;
+        let dragStart = { x: 0, y: 0 };
+        let dragCurrent = { x: 0, y: 0 };
+        // Touch/mouse drag events for control
+        function getCanvasPos(e) {
+            const rect = canvas.getBoundingClientRect();
+            if (e.touches && e.touches.length > 0) {
+                return {
+                    x: e.touches[0].clientX - rect.left,
+                    y: e.touches[0].clientY - rect.top
+                };
+            } else {
+                return {
+                    x: e.clientX - rect.left,
+                    y: e.clientY - rect.top
+                };
+            }
+        }
+        // Touch events
+        canvas.addEventListener('touchstart', (e) => {
+            dragActive = true;
+            const pos = getCanvasPos(e);
+            dragStart.x = pos.x;
+            dragStart.y = pos.y;
+            dragCurrent.x = pos.x;
+            dragCurrent.y = pos.y;
+            e.preventDefault();
+        }, { passive: false });
+        canvas.addEventListener('touchmove', (e) => {
+            if (!dragActive) return;
+            const pos = getCanvasPos(e);
+            dragCurrent.x = pos.x;
+            dragCurrent.y = pos.y;
+            e.preventDefault();
+        }, { passive: false });
+        canvas.addEventListener('touchend', (e) => {
+            dragActive = false;
+            e.preventDefault();
+        }, { passive: false });
+        // Mouse events for drag control
+        canvas.addEventListener('mousedown', (e) => {
+            dragActive = true;
+            const pos = getCanvasPos(e);
+            dragStart.x = pos.x;
+            dragStart.y = pos.y;
+            dragCurrent.x = pos.x;
+            dragCurrent.y = pos.y;
+        });
+        canvas.addEventListener('mousemove', (e) => {
+            if (!dragActive) return;
+            const pos = getCanvasPos(e);
+            dragCurrent.x = pos.x;
+            dragCurrent.y = pos.y;
+        });
+        canvas.addEventListener('mouseup', (e) => {
+            dragActive = false;
+        });
+
+        // Game loop
+        let gameOver = false;
+        let shipAlive = true;
+        let shipTrappedInBlackhole = false;
+        let trappedBlackholeIndex = -1;
+        function update() {
+            // Clear the canvas
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Only update and draw the ship if alive or trapped in blackhole
+            if (shipAlive || shipTrappedInBlackhole) {
+                if (shipAlive) {
+                    // --- Drag/touch control logic ---
+                    const dx = dragCurrent.x - dragStart.x;
+                    const dy = dragCurrent.y - dragStart.y;
+                    const mag = Math.sqrt(dx * dx + dy * dy);
+                    if (dragActive && mag > 10) { // Only move if drag is significant
+                        // Angle to drag direction
+                        const angle = Math.atan2(-dy, dx);
+                        // Instantly set ship angle to drag direction
+                        ship.rotation = 0;
+                        ship.angle = angle;
+                        // Accelerate in drag direction, proportional to drag length
+                        const thrustMag = Math.min(mag / 60, 1) * (GAME_SETTINGS.SHIP_THRUST * 0.4); // Reduced acceleration
+                        ship.thrust.x += thrustMag * Math.cos(ship.angle);
+                        ship.thrust.y -= thrustMag * Math.sin(ship.angle);
+                    } else {
+                        // Handle ship rotation
+                        if (keys['ArrowLeft'] || keys['a'] || keys['A']) ship.rotation = GAME_SETTINGS.SHIP_TURN_SPEED;
+                        else if (keys['ArrowRight'] || keys['d'] || keys['D']) ship.rotation = -GAME_SETTINGS.SHIP_TURN_SPEED;
+                        else ship.rotation = 0;
+
+                        // Handle ship thrust
+                        if (keys['ArrowUp'] || keys['w'] || keys['W']) {
+                            ship.thrust.x += GAME_SETTINGS.SHIP_THRUST * Math.cos(ship.angle);
+                            ship.thrust.y -= GAME_SETTINGS.SHIP_THRUST * Math.sin(ship.angle);
+                        }
+                    }
+
+                    // Update ship position
+                    ship.angle += ship.rotation;
+                    ship.x += ship.thrust.x;
+                    ship.y += ship.thrust.y;
+                    ship.thrust.x *= GAME_SETTINGS.FRICTION;
+                    ship.thrust.y *= GAME_SETTINGS.FRICTION;
+
+                    // Handle ship screen wrapping
+                    if (ship.x < 0) ship.x = canvas.width;
+                    if (ship.x > canvas.width) ship.x = 0;
+                    if (ship.y < 0) ship.y = canvas.height;
+                    if (ship.y > canvas.height) ship.y = 0;
+                } else if (shipTrappedInBlackhole && trappedBlackholeIndex >= 0 && trappedBlackholeIndex < blackholes.length) {
+                    // Move ship toward blackhole center like asteroids
+                    const bh = blackholes[trappedBlackholeIndex];
+                    const dx = bh.x - ship.x;
+                    const dy = bh.y - ship.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist > 1) { // Avoid division by zero and jitter
+                        // Suck in ship with same force as asteroids
+                        ship.thrust.x += (dx / dist) * 0.5;
+                        ship.thrust.y += (dy / dist) * 0.5;
+                    }
+                    ship.x += ship.thrust.x;
+                    ship.y += ship.thrust.y;
+                    ship.thrust.x *= GAME_SETTINGS.FRICTION;
+                    ship.thrust.y *= GAME_SETTINGS.FRICTION;
+                }
+                // Draw ship (always draw if alive or trapped)
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(
+                    ship.x + 4/3 * ship.radius * Math.cos(ship.angle),
+                    ship.y - 4/3 * ship.radius * Math.sin(ship.angle)
+                );
+                ctx.lineTo(
+                    ship.x - ship.radius * (2/3 * Math.cos(ship.angle) + Math.sin(ship.angle)),
+                    ship.y + ship.radius * (2/3 * Math.sin(ship.angle) - Math.cos(ship.angle))
+                );
+                ctx.lineTo(
+                    ship.x - ship.radius * (2/3 * Math.cos(ship.angle) - Math.sin(ship.angle)),
+                    ship.y + ship.radius * (2/3 * Math.sin(ship.angle) + Math.cos(ship.angle))
+                );
+                ctx.closePath();
+                ctx.stroke();
+            }
+
+            // Update and draw asteroids
+            asteroids.forEach((asteroid, index) => {
+                // Move asteroid
+                asteroid.x += asteroid.dx;
+                asteroid.y += asteroid.dy;
+
+                // Handle asteroid screen wrapping
+                if (asteroid.x < 0) asteroid.x = canvas.width;
+                if (asteroid.x > canvas.width) asteroid.x = 0;
+                if (asteroid.y < 0) asteroid.y = canvas.height;
+                if (asteroid.y > canvas.height) asteroid.y = 0;
+
+                // Draw asteroid
+                ctx.beginPath();
+                ctx.arc(asteroid.x, asteroid.y, asteroid.radius, 0, Math.PI * 2);
+                ctx.stroke();
+            });
+
+            // Power-up logic
+            maybeSpawnPowerUp();
+            if (powerUp) {
+                // Draw power-up
+                ctx.save();
+                ctx.strokeStyle = powerUp.type === 'blackhole' ? 'purple' : 'yellow';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(powerUp.x, powerUp.y, powerUp.radius, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+                // Check for ship collision with power-up
+                const dx = ship.x - powerUp.x;
+                const dy = ship.y - powerUp.y;
+                if (Math.sqrt(dx * dx + dy * dy) < ship.radius + powerUp.radius) {
+                    if (powerUp.type === 'blackhole') {
+                        hasBlackholeShot = true;
+                    } else {
+                        hasExplodingShot = true;
+                    }
+                    powerUp = null;
+                }
+            }
+
+            // Update and draw bullets
+            bullets = bullets.filter(bullet => {
+                // Move bullet
+                bullet.x += bullet.dx;
+                bullet.y += bullet.dy;
+
+                // Handle bullet screen wrapping
+                if (bullet.x < 0) bullet.x = canvas.width;
+                if (bullet.x > canvas.width) bullet.x = 0;
+                if (bullet.y < 0) bullet.y = canvas.height;
+                if (bullet.y > canvas.height) bullet.y = 0;
+
+                // Draw bullet
+                ctx.fillStyle = bullet.blackhole ? 'purple' : (bullet.exploding ? 'orange' : 'white');
+                ctx.beginPath();
+                ctx.arc(bullet.x, bullet.y, bullet.exploding ? 4 : 2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Check for asteroid hits
+                let hit = false;
+                asteroids = asteroids.flatMap(asteroid => {
+                    if (hit) return [asteroid];
+                    const dx = bullet.x - asteroid.x;
+                    const dy = bullet.y - asteroid.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < asteroid.radius) {
+                        hit = true;
+                        // Blackhole shot: create blackhole at impact
+                        if (bullet.blackhole) {
+                            blackholes.push({
+                                x: bullet.x,
+                                y: bullet.y,
+                                radius: asteroid.radius * 2.5,
+                                timeLeft: 120 // 2 seconds at 60 FPS
+                            });
+                        }
+                        // Exploding shot: AOE damage
+                        if (bullet.exploding) {
+                            // Remove all asteroids within AOE radius
+                            const aoeRadius = asteroid.radius * 2.5;
+                            let destroyed = [];
+                            asteroids.forEach(a => {
+                                const adx = bullet.x - a.x;
+                                const ady = bullet.y - a.y;
+                                if (Math.sqrt(adx * adx + ady * ady) < aoeRadius) {
+                                    // Split if big enough
+                                    if (a.radius > GAME_SETTINGS.ASTEROID_SIZE / 4) {
+                                        const pieces = Math.floor(Math.random() * 3) + 1;
+                                        const newRadius = a.radius / 2;
+                                        for (let i = 0; i < pieces; i++) {
+                                            destroyed.push({
+                                                x: a.x,
+                                                y: a.y,
+                                                dx: (Math.random() * 2 - 1) * GAME_SETTINGS.ASTEROID_SPEED,
+                                                dy: (Math.random() * 2 - 1) * GAME_SETTINGS.ASTEROID_SPEED,
+                                                radius: newRadius
+                                            });
+                                        }
+                                    }
+                                }
+                            });
+                            // Remove all asteroids in AOE
+                            asteroids = asteroids.filter(a => {
+                                const adx = bullet.x - a.x;
+                                const ady = bullet.y - a.y;
+                                return Math.sqrt(adx * adx + ady * ady) >= aoeRadius;
+                            });
+                            asteroids.push(...destroyed);
+
+                            // Animate explosion
+                            explosions.push({
+                                x: bullet.x,
+                                y: bullet.y,
+                                radius: aoeRadius,
+                                maxRadius: aoeRadius,
+                                alpha: 1.0,
+                                frame: 0
+                            });
+                        } else {
+                            // Only split if the asteroid is big enough
+                            if (asteroid.radius > GAME_SETTINGS.ASTEROID_SIZE / 4) {
+                                const pieces = Math.floor(Math.random() * 3) + 1; // 1 to 3 pieces
+                                const newRadius = asteroid.radius / 2;
+                                let newAsteroids = [];
+                                for (let i = 0; i < pieces; i++) {
+                                    newAsteroids.push({
+                                        x: asteroid.x,
+                                        y: asteroid.y,
+                                        dx: (Math.random() * 2 - 1) * GAME_SETTINGS.ASTEROID_SPEED,
+                                        dy: (Math.random() * 2 - 1) * GAME_SETTINGS.ASTEROID_SPEED,
+                                        radius: newRadius
+                                    });
+                                }
+                                return newAsteroids;
+                            }
+                        }
+                        // If too small, just destroy
+                        return [];
+                    }
+                    return [asteroid];
+                });
+                // Decrease bullet life and remove if expired
+                bullet.life--;
+                // Destroy bullet if it hit something
+                if (hit) return false;
+                return bullet.life > 0;
+            });
+
+            // Animate explosions
+            explosions = explosions.filter(explosion => {
+                ctx.save();
+                ctx.globalAlpha = explosion.alpha;
+                ctx.strokeStyle = 'orange';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.arc(explosion.x, explosion.y, explosion.radius, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+                // Animate: expand and fade
+                explosion.radius += explosion.maxRadius * 0.08;
+                explosion.alpha -= 0.08;
+                explosion.frame++;
+                return explosion.alpha > 0;
+            });
+
+            // Animate blackholes and suck in asteroids
+            blackholes = blackholes.filter(bh => {
+                // Draw blackhole
+                ctx.save();
+                ctx.globalAlpha = 0.7;
+                ctx.strokeStyle = 'purple';
+                ctx.lineWidth = 5;
+                ctx.beginPath();
+                ctx.arc(bh.x, bh.y, bh.radius, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.restore();
+                // Suck in asteroids
+                asteroids.forEach(a => {
+                    const dx = bh.x - a.x;
+                    const dy = bh.y - a.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < bh.radius) {
+                        // Move asteroid toward blackhole
+                        a.dx += (dx / dist) * 0.5;
+                        a.dy += (dy / dist) * 0.5;
+                    }
+                });
+                bh.timeLeft--;
+                // When blackhole expires, destroy all asteroids within its radius
+                if (bh.timeLeft === 0) {
+                    asteroids = asteroids.filter(a => {
+                        const dx = bh.x - a.x;
+                        const dy = bh.y - a.y;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+                        return dist >= bh.radius;
+                    });
+                }
+                return bh.timeLeft > 0;
+            });
+
+            // Animate ship explosion if needed
+            if (!shipAlive && !shipTrappedInBlackhole && shipExplosion) {
+                ctx.save();
+                ctx.globalAlpha = shipExplosion.alpha;
+                ctx.strokeStyle = 'orange';
+                ctx.lineWidth = 4;
+                for (let i = 0; i < shipExplosion.particles.length; i++) {
+                    const p = shipExplosion.particles[i];
+                    ctx.beginPath();
+                    ctx.moveTo(p.x, p.y);
+                    ctx.lineTo(p.x - p.dx * 3, p.y - p.dy * 3);
+                    ctx.stroke();
+                }
+                ctx.restore();
+                // Animate explosion particles
+                shipExplosion.particles.forEach(p => {
+                    p.x += p.dx;
+                    p.y += p.dy;
+                    p.dx *= 0.97;
+                    p.dy *= 0.97;
+                });
+                shipExplosion.alpha -= 0.04;
+                if (shipExplosion.alpha <= 0) shipExplosion = null;
+            }
+
+            // Ship collision with asteroids
+            if (shipAlive) {
+                for (let i = 0; i < asteroids.length; i++) {
+                    const dx = ship.x - asteroids[i].x;
+                    const dy = ship.y - asteroids[i].y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < ship.radius + asteroids[i].radius) {
+                        gameOver = true;
+                        shipAlive = false;
+                        // Create ship explosion animation
+                        shipExplosion = {
+                            particles: Array.from({length: 16}, (_, i) => {
+                                const angle = (Math.PI * 2 * i) / 16;
+                                return {
+                                    x: ship.x,
+                                    y: ship.y,
+                                    dx: Math.cos(angle) * (3 + Math.random() * 2),
+                                    dy: Math.sin(angle) * (3 + Math.random() * 2)
+                                };
+                            }),
+                            alpha: 1.0
+                        };
+                        break;
+                    }
+                }
+                // Ship collision with explosions
+                for (let i = 0; i < explosions.length; i++) {
+                    const dx = ship.x - explosions[i].x;
+                    const dy = ship.y - explosions[i].y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < ship.radius + explosions[i].radius) {
+                        gameOver = true;
+                        shipAlive = false;
+                        // Create ship explosion animation
+                        shipExplosion = {
+                            particles: Array.from({length: 16}, (_, i) => {
+                                const angle = (Math.PI * 2 * i) / 16;
+                                return {
+                                    x: ship.x,
+                                    y: ship.y,
+                                    dx: Math.cos(angle) * (3 + Math.random() * 2),
+                                    dy: Math.sin(angle) * (3 + Math.random() * 2)
+                            };
+                        }),
+                        alpha: 1.0
+                    };
+                    break;
+                }
+            }
+            // Ship collision with blackholes
+            for (let i = 0; i < blackholes.length; i++) {
+                const dx = ship.x - blackholes[i].x;
+                const dy = ship.y - blackholes[i].y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist < ship.radius + blackholes[i].radius) {
+                    gameOver = true;
+                    shipAlive = false;
+                    shipTrappedInBlackhole = true;
+                    trappedBlackholeIndex = i;
+                    // Do NOT create explosion for blackhole death
+                    break;
+                }
+            }
+        }
+        // If ship is trapped in a blackhole, check if that blackhole still exists
+        if (shipTrappedInBlackhole) {
+            // Move ship toward blackhole center like asteroids
+            if (trappedBlackholeIndex < blackholes.length) {
+                const bh = blackholes[trappedBlackholeIndex];
+                const dx = bh.x - ship.x;
+                const dy = bh.y - ship.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                if (dist > 1) { // Avoid division by zero
+                    ship.x += (dx / dist) * 0.5;
+                    ship.y += (dy / dist) * 0.5;
+                }
+            } else {
+                // Blackhole expired
+                shipTrappedInBlackhole = false;
+            }
+        }
+        // Draw Game Over message if needed, after everything else
+        if (gameOver) {
+            ctx.save();
+            ctx.fillStyle = 'red';
+            ctx.font = 'bold 60px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Game Over', canvas.width / 2, canvas.height / 2);
+            ctx.restore();
+            // Draw retry button
+            const btnW = 200, btnH = 60;
+            const btnX = canvas.width / 2 - btnW / 2;
+            const btnY = canvas.height / 2 + 40;
+            ctx.save();
+            ctx.fillStyle = '#222';
+            ctx.globalAlpha = 0.85;
+            ctx.fillRect(btnX, btnY, btnW, btnH);
+            ctx.globalAlpha = 1.0;
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(btnX, btnY, btnW, btnH);
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 32px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('Retry', canvas.width / 2, btnY + btnH / 2);
+            ctx.restore();
+            // Store button bounds for click detection
+            window.retryBtnBounds = { x: btnX, y: btnY, w: btnW, h: btnH };
+        } else {
+            window.retryBtnBounds = null;
+        }
+
+        // Retry button click handler
+    canvas.addEventListener('mousedown', function(e) {
+        if (!window.retryBtnBounds) return;
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const b = window.retryBtnBounds;
+        if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) {
+            // Reset game state
+            asteroids = [];
+            bullets = [];
+            explosions = [];
+            powerUp = null;
+            hasExplodingShot = false;
+            hasBlackholeShot = false;
+            blackholes = [];
+            ship.x = canvas.width / 2;
+            ship.y = canvas.height / 2;
+            ship.angle = 0;
+            ship.thrust.x = 0;
+            ship.thrust.y = 0;
+            shipAlive = true;
+            shipTrappedInBlackhole = false;
+            trappedBlackholeIndex = -1;
+            gameOver = false;
+            createAsteroids();
+        }
+    });
+
+        // Touch event for shoot button
+canvas.addEventListener('touchstart', function(e) {
+    if (!window.shootBtn) return;
+    for (let i = 0; i < e.touches.length; i++) {
+        const rect = canvas.getBoundingClientRect();
+        const tx = e.touches[i].clientX - rect.left;
+        const ty = e.touches[i].clientY - rect.top;
+        const b = window.shootBtn;
+        const dist = Math.sqrt((tx - b.x) * (tx - b.x) + (ty - b.y) * (ty - b.y));
+        if (dist <= b.r) {
+            // Fire a bullet (same as spacebar)
+            bullets.push({
+                x: ship.x + 4/3 * ship.radius * Math.cos(ship.angle),
+                y: ship.y - 4/3 * ship.radius * Math.sin(ship.angle),
+                dx: GAME_SETTINGS.BULLET_SPEED * Math.cos(ship.angle),
+                dy: -GAME_SETTINGS.BULLET_SPEED * Math.sin(ship.angle),
+                life: GAME_SETTINGS.BULLET_LIFE,
+                exploding: hasExplodingShot,
+                blackhole: hasBlackholeShot
+            });
+            hasExplodingShot = false;
+            hasBlackholeShot = false;
+            // Prevent drag from starting if shoot button is pressed
+            e.preventDefault();
+            break;
+        }
+    }
+}, { passive: false });
+
+        // --- Draw Shoot button for touch devices (always on top) ---
+        const shootBtnRadius = 48;
+        const shootBtnX = canvas.width - shootBtnRadius - 20;
+        const shootBtnY = canvas.height - shootBtnRadius - 20;
+        ctx.save();
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath();
+        ctx.arc(shootBtnX, shootBtnY, shootBtnRadius, 0, Math.PI * 2);
+        ctx.fillStyle = '#222';
+        ctx.shadowColor = 'white';
+        ctx.shadowBlur = 16;
+        ctx.fill();
+        ctx.globalAlpha = 1.0;
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = 'white';
+        ctx.stroke();
+        ctx.font = 'bold 30px Arial';
+        ctx.fillStyle = 'white';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = 'black';
+        ctx.shadowBlur = 0;
+        ctx.fillText('SHOOT', shootBtnX, shootBtnY);
+        ctx.restore();
+        // Store button bounds for touch detection
+        window.shootBtn = { x: shootBtnX, y: shootBtnY, r: shootBtnRadius };
+
+        // Request next frame
+        requestAnimationFrame(update);
+    }
+
+    // Start the game
+    createAsteroids();
+    update();
+    </script>
+</body>
+</html>
