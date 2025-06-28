@@ -612,34 +612,53 @@
             window.retryBtnBounds = null;
         }
 
-        // Retry button click handler
-    canvas.addEventListener('mousedown', function(e) {
-        if (!window.retryBtnBounds) return;
-        const rect = canvas.getBoundingClientRect();
-        const mx = e.clientX - rect.left;
-        const my = e.clientY - rect.top;
-        const b = window.retryBtnBounds;
-        if (mx >= b.x && mx <= b.x + b.w && my >= b.y && my <= b.y + b.h) {
-            // Reset game state
-            asteroids = [];
-            bullets = [];
-            explosions = [];
-            powerUp = null;
-            hasExplodingShot = false;
-            hasBlackholeShot = false;
-            blackholes = [];
-            ship.x = canvas.width / 2;
-            ship.y = canvas.height / 2;
-            ship.angle = 0;
-            ship.thrust.x = 0;
-            ship.thrust.y = 0;
-            shipAlive = true;
-            shipTrappedInBlackhole = false;
-            trappedBlackholeIndex = -1;
-            gameOver = false;
-            createAsteroids();
+        // Refactored: common retry logic
+        function resetGameIfRetryBtnPressed(x, y, event) {
+            if (!window.retryBtnBounds) return;
+            const b = window.retryBtnBounds;
+            if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) {
+                asteroids = [];
+                bullets = [];
+                explosions = [];
+                powerUp = null;
+                hasExplodingShot = false;
+                hasBlackholeShot = false;
+                blackholes = [];
+                ship.x = canvas.width / 2;
+                ship.y = canvas.height / 2;
+                ship.angle = 0;
+                ship.thrust.x = 0;
+                ship.thrust.y = 0;
+                shipAlive = true;
+                shipTrappedInBlackhole = false;
+                trappedBlackholeIndex = -1;
+                gameOver = false;
+                createAsteroids();
+                if (event) event.preventDefault();
+                return true;
+            }
+            return false;
         }
-    });
+
+        // Retry button click handler
+        canvas.addEventListener('mousedown', function(e) {
+            if (!window.retryBtnBounds) return;
+            const rect = canvas.getBoundingClientRect();
+            const mx = e.clientX - rect.left;
+            const my = e.clientY - rect.top;
+            resetGameIfRetryBtnPressed(mx, my, e);
+        });
+
+        // Retry button touch handler for iOS/touch devices
+        canvas.addEventListener('touchstart', function(e) {
+            if (!window.retryBtnBounds) return;
+            const rect = canvas.getBoundingClientRect();
+            for (let i = 0; i < e.touches.length; i++) {
+                const tx = e.touches[i].clientX - rect.left;
+                const ty = e.touches[i].clientY - rect.top;
+                if (resetGameIfRetryBtnPressed(tx, ty, e)) break;
+            }
+        }, { passive: false });
 
         // Touch event for shoot button
 canvas.addEventListener('touchstart', function(e) {
