@@ -184,6 +184,44 @@
             dragActive = false;
         });
 
+        // --- Helper function for explosion effect ---
+function explodeAt(x, y, aoeRadius) {
+    let destroyed = [];
+    asteroids.forEach(a => {
+        const adx = x - a.x;
+        const ady = y - a.y;
+        if (Math.sqrt(adx * adx + ady * ady) < aoeRadius) {
+            if (a.radius > GAME_SETTINGS.ASTEROID_SIZE / 4) {
+                const pieces = Math.floor(Math.random() * 3) + 1;
+                const newRadius = a.radius / 2;
+                for (let i = 0; i < pieces; i++) {
+                    destroyed.push({
+                        x: a.x,
+                        y: a.y,
+                        dx: (Math.random() * 2 - 1) * GAME_SETTINGS.ASTEROID_SPEED,
+                        dy: (Math.random() * 2 - 1) * GAME_SETTINGS.ASTEROID_SPEED,
+                        radius: newRadius
+                    });
+                }
+            }
+        }
+    });
+    asteroids = asteroids.filter(a => {
+        const adx = x - a.x;
+        const ady = y - a.y;
+        return Math.sqrt(adx * adx + ady * ady) >= aoeRadius;
+    });
+    asteroids.push(...destroyed);
+    explosions.push({
+        x: x,
+        y: y,
+        radius: aoeRadius,
+        maxRadius: aoeRadius,
+        alpha: 1.0,
+        frame: 0
+    });
+}
+
         // Game loop
         let gameOver = false;
         let shipAlive = true;
@@ -352,46 +390,8 @@
                         }
                         // Exploding shot: AOE damage
                         if (bullet.exploding) {
-                            // Remove all asteroids within AOE radius
                             const aoeRadius = asteroid.radius * 2.5;
-                            let destroyed = [];
-                            asteroids.forEach(a => {
-                                const adx = bullet.x - a.x;
-                                const ady = bullet.y - a.y;
-                                if (Math.sqrt(adx * adx + ady * ady) < aoeRadius) {
-                                    // Split if big enough
-                                    if (a.radius > GAME_SETTINGS.ASTEROID_SIZE / 4) {
-                                        const pieces = Math.floor(Math.random() * 3) + 1;
-                                        const newRadius = a.radius / 2;
-                                        for (let i = 0; i < pieces; i++) {
-                                            destroyed.push({
-                                                x: a.x,
-                                                y: a.y,
-                                                dx: (Math.random() * 2 - 1) * GAME_SETTINGS.ASTEROID_SPEED,
-                                                dy: (Math.random() * 2 - 1) * GAME_SETTINGS.ASTEROID_SPEED,
-                                                radius: newRadius
-                                            });
-                                        }
-                                    }
-                                }
-                            });
-                            // Remove all asteroids in AOE
-                            asteroids = asteroids.filter(a => {
-                                const adx = bullet.x - a.x;
-                                const ady = bullet.y - a.y;
-                                return Math.sqrt(adx * adx + ady * ady) >= aoeRadius;
-                            });
-                            asteroids.push(...destroyed);
-
-                            // Animate explosion
-                            explosions.push({
-                                x: bullet.x,
-                                y: bullet.y,
-                                radius: aoeRadius,
-                                maxRadius: aoeRadius,
-                                alpha: 1.0,
-                                frame: 0
-                            });
+                            explodeAt(bullet.x, bullet.y, aoeRadius);
                         } else {
                             // Only split if the asteroid is big enough
                             if (asteroid.radius > GAME_SETTINGS.ASTEROID_SIZE / 4) {
@@ -417,6 +417,24 @@
                 });
                 // Decrease bullet life and remove if expired
                 bullet.life--;
+                // If bullet expired and is special, trigger its effect at its last position
+                if (bullet.life <= 0) {
+                    if (bullet.blackhole) {
+                        // Create blackhole at bullet's last position
+                        blackholes.push({
+                            x: bullet.x,
+                            y: bullet.y,
+                            radius: GAME_SETTINGS.ASTEROID_SIZE * 2.5,
+                            timeLeft: 120
+                        });
+                    } else if (bullet.exploding) {
+                        // Explode at bullet's last position
+                        const aoeRadius = GAME_SETTINGS.ASTEROID_SIZE * 2.5;
+                        explodeAt(bullet.x, bullet.y, aoeRadius);
+                    }
+                    // Remove bullet
+                    return false;
+                }
                 // Destroy bullet if it hit something
                 if (hit) return false;
                 return bullet.life > 0;
