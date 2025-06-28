@@ -339,17 +339,7 @@ function explodeAt(x, y, aoeRadius) {
                 ctx.arc(powerUp.x, powerUp.y, powerUp.radius, 0, Math.PI * 2);
                 ctx.stroke();
                 ctx.restore();
-                // Check for ship collision with power-up
-                const dx = ship.x - powerUp.x;
-                const dy = ship.y - powerUp.y;
-                if (Math.sqrt(dx * dx + dy * dy) < ship.radius + powerUp.radius) {
-                    if (powerUp.type === 'blackhole') {
-                        hasBlackholeShot = true;
-                    } else {
-                        hasExplodingShot = true;
-                    }
-                    powerUp = null;
-                }
+                // No longer check for ship collision with power-up
             }
 
             // Update and draw bullets
@@ -415,12 +405,34 @@ function explodeAt(x, y, aoeRadius) {
                     }
                     return [asteroid];
                 });
+                // Check for power-up hit
+                if (powerUp) {
+                    const dx = bullet.x - powerUp.x;
+                    const dy = bullet.y - powerUp.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < powerUp.radius + (bullet.exploding ? 4 : 2)) {
+                        // Power-up is hit by bullet
+                        if (powerUp.type === 'blackhole') {
+                            blackholes.push({
+                                x: powerUp.x,
+                                y: powerUp.y,
+                                radius: GAME_SETTINGS.ASTEROID_SIZE * 2.5,
+                                timeLeft: 120
+                            });
+                        } else if (powerUp.type === 'exploding') {
+                            const aoeRadius = GAME_SETTINGS.ASTEROID_SIZE * 2.5;
+                            explodeAt(powerUp.x, powerUp.y, aoeRadius);
+                        }
+                        powerUp = null;
+                        // Remove bullet
+                        return false;
+                    }
+                }
                 // Decrease bullet life and remove if expired
                 bullet.life--;
                 // If bullet expired and is special, trigger its effect at its last position
                 if (bullet.life <= 0) {
                     if (bullet.blackhole) {
-                        // Create blackhole at bullet's last position
                         blackholes.push({
                             x: bullet.x,
                             y: bullet.y,
@@ -428,14 +440,11 @@ function explodeAt(x, y, aoeRadius) {
                             timeLeft: 120
                         });
                     } else if (bullet.exploding) {
-                        // Explode at bullet's last position
                         const aoeRadius = GAME_SETTINGS.ASTEROID_SIZE * 2.5;
                         explodeAt(bullet.x, bullet.y, aoeRadius);
                     }
-                    // Remove bullet
                     return false;
                 }
-                // Destroy bullet if it hit something
                 if (hit) return false;
                 return bullet.life > 0;
             });
