@@ -118,6 +118,7 @@
 
         // Function to spawn a power-up randomly
         function maybeSpawnPowerUp() {
+            if (gameOver) return; // Do not spawn powerups after game over
             if (!powerUp && Math.random() < 0.002) { // ~1 in 500 chance per frame
                 powerUp = {
                     x: Math.random() * canvas.width,
@@ -233,6 +234,7 @@
         // Add new asteroids every 15 seconds
         let lastAsteroidAddTime = Date.now();
         function maybeAddAsteroids() {
+            if (gameOver) return; // Do not spawn asteroids after game over
             const now = Date.now();
             if (now - lastAsteroidAddTime >= 15000) { // 15 seconds
                 // Add 1-2 new asteroids
