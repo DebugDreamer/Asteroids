@@ -64,6 +64,7 @@
             ASTEROID_COUNT: 5,          // Initial number of asteroids
             ASTEROID_SPEED: 2,          // Maximum asteroid speed
             ASTEROID_SIZE: 50,          // Size of asteroids
+            EXPLOSION_SIZE: 75,          // Size of asteroids
             SHIP_THRUST: 0.3,          // Acceleration of the ship
             SHIP_TURN_SPEED: 0.06,     // How fast the ship rotates
             FRICTION: 0.99,            // Ship movement friction (1 = no friction)
@@ -189,7 +190,8 @@
         });
 
         // --- Helper function for explosion effect ---
-        function explodeAt(x, y, aoeRadius) {
+        function explodeAt(x, y) {
+            const aoeRadius = GAME_SETTINGS.EXPLOSION_SIZE;
             let destroyed = [];
             asteroids.forEach(a => {
                 const adx = x - a.x;
@@ -236,7 +238,7 @@
         function maybeAddAsteroids() {
             if (gameOver) return; // Do not spawn asteroids after game over
             const now = Date.now();
-            if (now - lastAsteroidAddTime >= 15000) { // 15 seconds
+            if (now - lastAsteroidAddTime >= 5000) { // 15 seconds
                 // Add 1-2 new asteroids
                 const numNew = Math.floor(Math.random() * 2) + 1;
                 for (let i = 0; i < numNew; i++) {
@@ -413,8 +415,7 @@
                         }
                         // Exploding shot: AOE damage
                         if (bullet.exploding) {
-                            const aoeRadius = asteroid.radius * 2.5;
-                            explodeAt(bullet.x, bullet.y, aoeRadius);
+                            explodeAt(bullet.x, bullet.y);
                         } else {
                             // Only split if the asteroid is big enough
                             if (asteroid.radius > GAME_SETTINGS.ASTEROID_SIZE / 4) {
@@ -453,8 +454,7 @@
                                 timeLeft: 120
                             });
                         } else if (powerUp.type === 'exploding') {
-                            const aoeRadius = GAME_SETTINGS.ASTEROID_SIZE * 2.5;
-                            explodeAt(powerUp.x, powerUp.y, aoeRadius);
+                            explodeAt(powerUp.x, powerUp.y);
                         }
                         powerUp = null;
                         // Remove bullet
@@ -473,8 +473,7 @@
                             timeLeft: 120
                         });
                     } else if (bullet.exploding) {
-                        const aoeRadius = GAME_SETTINGS.ASTEROID_SIZE * 2.5;
-                        explodeAt(bullet.x, bullet.y, aoeRadius);
+                        explodeAt(bullet.x, bullet.y);
                     }
                     return false;
                 }
