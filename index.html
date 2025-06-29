@@ -101,7 +101,7 @@
 
         // Shoot bullets
         document.addEventListener('keydown', (e) => {
-            if (e.key === ' ') { // Fire a bullet every time spacebar is pressed
+            if (e.key === ' ' && shipAlive) { // Only fire if ship is alive
                 bullets.push({
                     x: ship.x + 4 / 3 * ship.radius * Math.cos(ship.angle),
                     y: ship.y - 4 / 3 * ship.radius * Math.sin(ship.angle),
@@ -722,7 +722,7 @@
 
             // Touch event for shoot button
             canvas.addEventListener('touchstart', function (e) {
-                if (!window.shootBtn) return;
+                if (!window.shootBtn || !shipAlive) return; // Only fire if ship is alive
                 for (let i = 0; i < e.touches.length; i++) {
                     const rect = canvas.getBoundingClientRect();
                     const tx = e.touches[i].clientX - rect.left;
